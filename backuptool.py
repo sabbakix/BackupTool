@@ -1,7 +1,7 @@
+import wx
 import shutil
 import os
-from tkinter import filedialog
-from tkinter import Tk, Label, Button, StringVar
+from wx.lib.dialogs import ScrolledMessageDialog
 
 def backup_files(source, destination):
     for item in os.listdir(source):
@@ -12,38 +12,36 @@ def backup_files(source, destination):
         else:
             shutil.copy2(s, d)
 
-class BackupTool:
-    def __init__(self, master):
-        self.master = master
-        master.title("Backup Tool")
+class BackupTool(wx.Frame):
+    def __init__(self):
+        wx.Frame.__init__(self, None, title="Backup Tool", size=(600, 300))
 
-        self.source_dir = StringVar()
-        self.destination_dir = StringVar()
+        panel = wx.Panel(self)
 
-        self.source_label = Label(master, textvariable=self.source_dir)
-        self.source_label.pack()
+        source_label = wx.StaticText(panel, label="Source Directory:")
+        self.source_dir = wx.DirPickerCtrl(panel)
 
-        self.destination_label = Label(master, textvariable=self.destination_dir)
-        self.destination_label.pack()
+        destination_label = wx.StaticText(panel, label="Destination Directory:")
+        self.destination_dir = wx.DirPickerCtrl(panel)
 
-        self.source_button = Button(master, text="Select source directory", command=self.select_source)
-        self.source_button.pack()
+        self.backup_button = wx.Button(panel, label="Start backup")
+        self.backup_button.Bind(wx.EVT_BUTTON, self.start_backup)
 
-        self.destination_button = Button(master, text="Select destination directory", command=self.select_destination)
-        self.destination_button.pack()
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(source_label, 0, wx.ALL, 5)
+        sizer.Add(self.source_dir, 0, wx.ALL, 5)
+        sizer.Add(destination_label, 0, wx.ALL, 5)
+        sizer.Add(self.destination_dir, 0, wx.ALL, 5)
+        sizer.Add(self.backup_button, 0, wx.ALL, 5)
 
-        self.backup_button = Button(master, text="Start backup", command=self.start_backup)
-        self.backup_button.pack()
+        panel.SetSizer(sizer)
 
-    def select_source(self):
-        self.source_dir.set(filedialog.askdirectory())
+    def start_backup(self, event):
+        source = self.source_dir.GetPath()
+        destination = self.destination_dir.GetPath()
+        backup_files(source, destination)
 
-    def select_destination(self):
-        self.destination_dir.set(filedialog.askdirectory())
-
-    def start_backup(self):
-        backup_files(self.source_dir.get(), self.destination_dir.get())
-
-root = Tk()
-backup_tool = BackupTool(root)
-root.mainloop()
+app = wx.App(False)
+frame = BackupTool()
+frame.Show()
+app.MainLoop()
