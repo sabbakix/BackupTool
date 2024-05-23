@@ -4,6 +4,7 @@ import threading
 import csv
 import hashlib
 import datetime
+import configparser
 
 import wx
 from wx.lib.dialogs import ScrolledMessageDialog
@@ -181,6 +182,15 @@ class BackupTool(wx.Frame):
         # Call the constructor of the parent class
         super(BackupTool, self).__init__(parent, title=title, size=(900, 300))
 
+        self.config = configparser.ConfigParser()
+        self.config.read('config.ini')
+        if 'BackupTool' in self.config:
+            self.last_selected_source_dir = self.config['BackupTool'].get('last_selected_source_dir', '')
+            self.last_selected_destination_dir = self.config['BackupTool'].get('last_selected_destination_dir', '')
+        else:
+            self.last_selected_source_dir = ''
+            self.last_selected_destination_dir = ''
+
         now = datetime.datetime.now()
         timestamp = now.strftime('%Y-%m-%d_%H-%M-%S')
         print(timestamp)
@@ -197,11 +207,17 @@ class BackupTool(wx.Frame):
         # Create a static text widget with the label 'SOURCE:'
         source_label = wx.StaticText(panel, label="Source Directory:")
         self.source_dir = wx.DirPickerCtrl(panel)
+        self.source_dir.SetPath(self.last_selected_source_dir)
 
         # Create a static text widget with the label 'DESTINATION:'
         destination_label = wx.StaticText(panel, label="Destination Directory:")
         self.destination_dir = wx.DirPickerCtrl(panel)
+        self.destination_dir.SetPath(self.last_selected_destination_dir)
 
+
+        # Bind the directory changed event of the directory picker controls
+        self.source_dir.Bind(wx.EVT_DIRPICKER_CHANGED, self.on_source_dir_changed)
+        self.destination_dir.Bind(wx.EVT_DIRPICKER_CHANGED, self.on_destination_dir_changed)
 
         # Add the static text and directory picker controls to the horizontal box sizer
         hbox1.Add(source_label, flag=wx.RIGHT, border=8)
@@ -213,7 +229,6 @@ class BackupTool(wx.Frame):
 
         # Add a spacer to the vertical box sizer
         box.Add((-1, 10))
-
 
 
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
@@ -228,9 +243,6 @@ class BackupTool(wx.Frame):
         st3 = wx.StaticText(panel, label='PROGRESS:')
         hbox3.Add(st3, flag=wx.RIGHT, border=8)
         box.Add(hbox3, flag=wx.LEFT | wx.TOP, border=10)
-
-        
-
 
         # Add a spacer to the vertical box sizer
         box.Add((-1, 10))
@@ -251,9 +263,6 @@ class BackupTool(wx.Frame):
         # Add a spacer to the vertical box sizer
         box.Add((-1, 10))
 
-
-
-
         # Set the sizer for the panel
         panel.SetSizer(box)
         # Center the frame on the screen
@@ -261,6 +270,25 @@ class BackupTool(wx.Frame):
         # Show the frame
         self.Show(True)
 
+    def on_source_dir_changed(self, event):
+        path = event.GetPath()
+        self.last_selected_source_dir = path
+        print(f"Selected source directory: {path}")
+        self.save_config()
+
+    def on_destination_dir_changed(self, event):
+        path = event.GetPath()
+        self.last_selected_destination_dir = path
+        print(f"Selected destination directory: {path}")
+        self.save_config()
+
+    def save_config(self):
+        self.config['BackupTool'] = {
+            'last_selected_source_dir': self.last_selected_source_dir,
+            'last_selected_destination_dir': self.last_selected_destination_dir
+        }
+        with open('config.ini', 'w') as configfile:
+            self.config.write(configfile)
 
     def start_backup(self, event):
         source = self.source_dir.GetPath()
