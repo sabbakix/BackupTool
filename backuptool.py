@@ -45,7 +45,7 @@ def scan_dir(job, source, destination, progress, status):
     file_list = "".join(["file_info_", get_timestamp() , ".csv"])
 
     with open( file_list, 'w', newline='') as csvfile:
-        fieldnames = ['type', 'path', 'size', 'modification_time', 'sha256_hash']
+        fieldnames = ['type', 'path', 'size', 'modification_time', 'sha256_hash', 'obj_status']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         print(f"Scanning {source}")
@@ -59,9 +59,10 @@ def scan_dir(job, source, destination, progress, status):
                 i=i+1
                 s = os.path.join(dirpath, d)
                 status_val = f"Scanning {s}"
+                obj_status = f"not copied yet"
                 try:
                     mod_time = get_dir_info(s)
-                    writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
+                    writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A', 'obj_status':obj_status})
                 except Exception as e:
                     print(f"Error scanning {s}: {e}")
             for f in filenames:
@@ -70,7 +71,7 @@ def scan_dir(job, source, destination, progress, status):
                 status_val = f"Scanning {s}"
                 try:
                     size, mod_time, hash = get_file_info(s)
-                    writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
+                    writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash, 'obj_status':obj_status})
                 except Exception as e:
                     print(f"Error scanning {s}: {e}")
             
@@ -121,58 +122,18 @@ def backup_files(job, source, destination, progress):
                 if os.path.isdir(s):
                     shutil.copytree(s, d, False, None)
                     mod_time = get_dir_info(s)
-                    writer.writerow({'type':'d','path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
+                    obj_status = f"copied"
+                    writer.writerow({'type':'d','path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A', 'obj_status:':obj_status})
                 else:
                     shutil.copy2(s, d)
                     size, mod_time, hash = get_file_info(s)
-                    writer.writerow({'type':'f','path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
+                    obj_status = f"copied"
+                    writer.writerow({'type':'f','path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash, 'obj_status:':obj_status})
             except Exception as e:
                 print(f"Error copying {s} to {d}: {e}")
             
             progress_val = int((i+1) / num_files * 100)
             wx.CallAfter(progress.SetValue, progress_val)
-
-
-
-
-
-'''
-class BackupTool(wx.Frame):
-    def __init__(self):
-        wx.Frame.__init__(self, None, title="Backup Tool", size=(600, 300))
-
-        panel = wx.Panel(self)
-        self.job = 1
-
-        source_label = wx.StaticText(panel, label="Source Directory:")
-        self.source_dir = wx.DirPickerCtrl(panel)
-
-        destination_label = wx.StaticText(panel, label="Destination Directory:")
-        self.destination_dir = wx.DirPickerCtrl(panel)
-
-        self.backup_button = wx.Button(panel, label="Start backup")
-        self.backup_button.Bind(wx.EVT_BUTTON, self.start_backup)
-
-        self.progress = wx.Gauge(panel)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(source_label, 0, wx.ALL, 5)
-        sizer.Add(self.source_dir, 0, wx.ALL, 5)
-        sizer.Add(destination_label, 0, wx.ALL, 5)
-        sizer.Add(self.destination_dir, 0, wx.ALL, 5)
-        sizer.Add(self.backup_button, 0, wx.ALL, 5)
-        sizer.Add(self.progress, 0, wx.EXPAND | wx.ALL, 5)
-
-        panel.SetSizer(sizer)
-
-    def start_backup(self, event):
-        source = self.source_dir.GetPath()
-        destination = self.destination_dir.GetPath()
-        self.backup_thread = threading.Thread(target=scan_dir, args=(self.job, source, destination, self.progress))
-        self.backup_thread.start()
-
-
-'''
 
 
 # Define the BackupTool class, which is a subclass of wx.Frame
@@ -213,7 +174,6 @@ class BackupTool(wx.Frame):
         destination_label = wx.StaticText(panel, label="Destination Directory:")
         self.destination_dir = wx.DirPickerCtrl(panel)
         self.destination_dir.SetPath(self.last_selected_destination_dir)
-
 
         # Bind the directory changed event of the directory picker controls
         self.source_dir.Bind(wx.EVT_DIRPICKER_CHANGED, self.on_source_dir_changed)
