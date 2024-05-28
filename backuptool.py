@@ -5,6 +5,7 @@ import csv
 import hashlib
 import datetime
 import configparser
+import time
 
 import wx
 from wx.lib.dialogs import ScrolledMessageDialog
@@ -36,7 +37,7 @@ def get_timestamp():
     return timestamp
 
 
-def scan_dir(job, source, destination, progress, status):
+def scan_dir(job, source, destination, progress, status, list_of_files_file_path):
 
     num_files, num_dirs = count_files_and_dirs(source)
     print(f"Number of files: {num_files}")
@@ -45,7 +46,7 @@ def scan_dir(job, source, destination, progress, status):
     file_list = "".join(["file_info_", get_timestamp() , ".csv"])
 
     with open( file_list, 'w', newline='') as csvfile:
-        fieldnames = ['type', 'path', 'size', 'modification_time', 'sha256_hash', 'obj_status']
+        fieldnames = ['type', 'path', 'size', 'modification_time', 'sha256_hash']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         print(f"Scanning {source}")
@@ -59,10 +60,9 @@ def scan_dir(job, source, destination, progress, status):
                 i=i+1
                 s = os.path.join(dirpath, d)
                 status_val = f"Scanning {s}"
-                obj_status = f"not copied yet"
                 try:
                     mod_time = get_dir_info(s)
-                    writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A', 'obj_status':obj_status})
+                    writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
                 except Exception as e:
                     print(f"Error scanning {s}: {e}")
             for f in filenames:
@@ -71,7 +71,7 @@ def scan_dir(job, source, destination, progress, status):
                 status_val = f"Scanning {s}"
                 try:
                     size, mod_time, hash = get_file_info(s)
-                    writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash, 'obj_status':obj_status})
+                    writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
                 except Exception as e:
                     print(f"Error scanning {s}: {e}")
             
@@ -81,6 +81,7 @@ def scan_dir(job, source, destination, progress, status):
             print(f"Progress: {progress_val}%")
             wx.CallAfter(progress.SetValue, progress_val)
             wx.CallAfter(status.SetLabel, status_val)
+            wx.CallAfter(list_of_files_file_path.SetLabel, file_list)
         status.SetLabel('Scan complete')
         print("Scan complete")
 
@@ -110,7 +111,7 @@ def backup_files(job, source, destination, progress):
     files = os.listdir(source)
     num_files = len(files)
 
-    file_list = " ".join([str(job), ".csv"])
+    file_list = "".join([str(job), ".csv"])
     with open(file_list, 'w', newline='') as csvfile:
         fieldnames = ['type','path', 'size', 'modification_time', 'sha256_hash']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -122,13 +123,11 @@ def backup_files(job, source, destination, progress):
                 if os.path.isdir(s):
                     shutil.copytree(s, d, False, None)
                     mod_time = get_dir_info(s)
-                    obj_status = f"copied"
-                    writer.writerow({'type':'d','path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A', 'obj_status:':obj_status})
+                    writer.writerow({'type':'d','path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
                 else:
                     shutil.copy2(s, d)
                     size, mod_time, hash = get_file_info(s)
-                    obj_status = f"copied"
-                    writer.writerow({'type':'f','path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash, 'obj_status:':obj_status})
+                    writer.writerow({'type':'f','path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
             except Exception as e:
                 print(f"Error copying {s} to {d}: {e}")
             
@@ -192,9 +191,19 @@ class BackupTool(wx.Frame):
 
 
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.scanning_button = wx.Button(panel, label="Start scanning")
+        self.scanning_button.Bind(wx.EVT_BUTTON, self.start_scan_dir)
+        hbox2.Add(self.scanning_button, flag=wx.RIGHT, border=8)
+        #box.Add(hbox2, flag=wx.LEFT | wx.TOP, border=10)
+
         self.backup_button = wx.Button(panel, label="Start backup")
         self.backup_button.Bind(wx.EVT_BUTTON, self.start_backup)
         hbox2.Add(self.backup_button, flag=wx.RIGHT, border=8)
+        #box.Add(hbox2, flag=wx.LEFT | wx.TOP, border=10)
+
+        self.close_button = wx.Button(panel, label="Close")
+        self.close_button.Bind(wx.EVT_BUTTON, self.on_close_button)
+        hbox2.Add(self.close_button, flag=wx.RIGHT, border=8)
         box.Add(hbox2, flag=wx.LEFT | wx.TOP, border=10)
 
         box.Add((-1, 10))
@@ -219,6 +228,14 @@ class BackupTool(wx.Frame):
         self.status = wx.StaticText(panel, label='Status')
         hbox5.Add(self.status, flag=wx.RIGHT, border=8)
         box.Add(hbox5, flag=wx.LEFT | wx.TOP, border=10)
+
+        # Add a spacer to the vertical box sizer
+        box.Add((-1, 10))
+        
+        hbox6 = wx.BoxSizer(wx.HORIZONTAL)
+        self.list_of_files_file_path = wx.StaticText(panel, label='list of files:')
+        hbox6.Add(self.list_of_files_file_path, flag=wx.RIGHT, border=8)
+        box.Add(hbox6, flag=wx.LEFT | wx.TOP, border=10)
 
         # Add a spacer to the vertical box sizer
         box.Add((-1, 10))
@@ -250,14 +267,52 @@ class BackupTool(wx.Frame):
         with open('config.ini', 'w') as configfile:
             self.config.write(configfile)
 
+    def start_scan_dir(self, event):
+        source = self.source_dir.GetPath()
+        destination = self.destination_dir.GetPath()
+        self.scan_thread = threading.Thread(target=scan_dir, args=(self.job, source, destination, self.progress, self.status, self.list_of_files_file_path))
+        self.scan_thread.start()
+
     def start_backup(self, event):
         source = self.source_dir.GetPath()
         destination = self.destination_dir.GetPath()
         self.backup_thread = threading.Thread(target=scan_dir, args=(self.job, source, destination, self.progress, self.status))
         self.backup_thread.start()
-            
+    
+    def on_close_button(self, event):
+        self.Close(True)
 
-app = wx.App(False)
-frame = BackupTool(None, "Backup Tool")
-frame.Show()
-app.MainLoop()
+
+# Define the Model class
+class Model:
+    def __init__(self):
+        self.data = []
+
+    def add_data(self, data):
+        self.data.append(data)
+        # Simulate a long-running task
+        time.sleep(5)
+
+class View(wx.Frame):
+    def __init__(self, controller):
+        # Initialize the frame
+        # Create widgets
+        frame = BackupTool(None, "Backup Tool")
+        frame.Show()
+        #self.button = wx.Button(self, label="Add Data")
+        #self.button.Bind(wx.EVT_BUTTON, controller.on_button_click)
+
+class Controller:
+    def __init__(self):
+        self.model = Model()
+        self.view = View(self)
+
+    def on_button_click(self, event):
+        thread = threading.Thread(target=self.model.add_data, args=("New data",))
+        thread.start()
+
+if __name__ == '__main__':
+    app = wx.App(False)
+    
+    controller = Controller()
+    app.MainLoop()
