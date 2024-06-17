@@ -37,7 +37,7 @@ def get_timestamp():
     return timestamp
 
 
-def scan_dir(job, source, destination, progress, status, list_of_files_file_path):
+def scan_dir(job, source, destination, progress, status, list_of_files_file_path, stop_thread):
 
     num_files, num_dirs = count_files_and_dirs(source)
     print(f"Number of files: {num_files}")
@@ -56,32 +56,33 @@ def scan_dir(job, source, destination, progress, status, list_of_files_file_path
         for dirpath, dirnames, filenames in os.walk(source):
             #print(f"Scanning {dirpath}")
             #print(f"Directories: {dirnames}")
-            for d in dirnames:
-                i=i+1
-                s = os.path.join(dirpath, d)
-                status_val = f"Scanning {s}"
-                try:
-                    mod_time = get_dir_info(s)
-                    writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
-                except Exception as e:
-                    print(f"Error scanning {s}: {e}")
-            for f in filenames:
-                i=i+1
-                s = os.path.join(dirpath, f)
-                status_val = f"Scanning {s}"
-                try:
-                    size, mod_time, hash = get_file_info(s)
-                    writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
-                except Exception as e:
-                    print(f"Error scanning {s}: {e}")
+            while not stop_thread.is_set():
+                for d in dirnames:
+                    i=i+1
+                    s = os.path.join(dirpath, d)
+                    status_val = f"Scanning {s}"
+                    try:
+                        mod_time = get_dir_info(s)
+                        writer.writerow({'type': 'd', 'path': s, 'size': 'N/A', 'modification_time': mod_time, 'sha256_hash': 'N/A'})
+                    except Exception as e:
+                        print(f"Error scanning {s}: {e}")
+                for f in filenames:
+                    i=i+1
+                    s = os.path.join(dirpath, f)
+                    status_val = f"Scanning {s}"
+                    try:
+                        size, mod_time, hash = get_file_info(s)
+                        writer.writerow({'type': 'f', 'path': s, 'size': size, 'modification_time': mod_time, 'sha256_hash': hash})
+                    except Exception as e:
+                        print(f"Error scanning {s}: {e}")
             
-            progress_val = int( i / (num_files + num_dirs) * 100)
-            if progress_val > 100:
-                progress_val = 100
-            print(f"Progress: {progress_val}%")
-            wx.CallAfter(progress.SetValue, progress_val)
-            wx.CallAfter(status.SetLabel, status_val)
-            wx.CallAfter(list_of_files_file_path.SetLabel, file_list)
+                progress_val = int( i / (num_files + num_dirs) * 100)
+                if progress_val > 100:
+                    progress_val = 100
+                print(f"Progress: {progress_val}%")
+                wx.CallAfter(progress.SetValue, progress_val)
+                wx.CallAfter(status.SetLabel, status_val)
+                wx.CallAfter(list_of_files_file_path.SetLabel, file_list)
         status.SetLabel('Scan complete')
         print("Scan complete")
 
@@ -141,6 +142,9 @@ class BackupTool(wx.Frame):
     def __init__(self, parent, title):
         # Call the constructor of the parent class
         super(BackupTool, self).__init__(parent, title=title, size=(900, 300))
+
+        self.SetBackgroundColour(wx.Colour(241, 241, 241))
+        self.SetMinSize(wx.Size(800, 400))
 
         self.config = configparser.ConfigParser()
         self.config.read('config.ini')
@@ -276,7 +280,8 @@ class BackupTool(wx.Frame):
     def start_backup(self, event):
         source = self.source_dir.GetPath()
         destination = self.destination_dir.GetPath()
-        self.backup_thread = threading.Thread(target=scan_dir, args=(self.job, source, destination, self.progress, self.status))
+        self.backup_thread = threading.Thread(target=scan_dir, args=(self.job, source, destination, self.progress, self.status, self.stop_thread))
+        self.stop_thread = threading.Event()
         self.backup_thread.start()
     
     def on_close_button(self, event):
@@ -306,6 +311,7 @@ class Controller:
     def __init__(self):
         self.model = Model()
         self.view = View(self)
+        
 
     def on_button_click(self, event):
         thread = threading.Thread(target=self.model.add_data, args=("New data",))
